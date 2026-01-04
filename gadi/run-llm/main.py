@@ -3,7 +3,7 @@ Run language models using Transformers.
 
 Detailed description:
     This module provides functionality to run language models using the 
-    Transformers library with 4-bit quantization for memory efficiency.
+    unsloth library with quantization for memory efficiency.
 
 Usage example:
     >>> qsub jobscript.sh
@@ -15,7 +15,7 @@ Created:
     2026-01-02
 """
 
-from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+from unsloth import FastModel
 import torch
 import sys
 
@@ -23,32 +23,13 @@ import sys
 job_id = sys.argv[1].split(".")[0]
 model_name = sys.argv[2]
 
-# Load tokenizer
-tokenizer = AutoTokenizer.from_pretrained(
-    f"/scratch/wd04/bk2508/models/{model_name}",
-    local_files_only=True
-)
-
-# Set pad_token if it doesn't exist
-if tokenizer.pad_token is None:
-    tokenizer.pad_token = tokenizer.eos_token
-
-# 4-bit quantization config
-config = BitsAndBytesConfig(
-    load_in_4bit=True,
-    bnb_4bit_quant_type="nf4",
-    bnb_4bit_compute_dtype=torch.float16,
-    bnb_4bit_use_double_quant=True
-)
-
-# Load model
-model = AutoModelForCausalLM.from_pretrained(
-    f"/scratch/wd04/bk2508/models/{model_name}",
-    device_map="auto",
-    local_files_only=True,
-    quantization_config=config,
-    trust_remote_code=True,
-    torch_dtype=torch.float16
+model, tokenizer = FastModel.from_pretrained(
+    model_name = model_name,
+    max_seq_length = 2048, # Choose any for long context!
+    load_in_4bit = False,  # 4 bit quantization to reduce memory
+    load_in_8bit = False, # [NEW!] A bit more accurate, uses 2x memory
+    full_finetuning = False, # [NEW!] We have full finetuning now!
+    # token = "hf_...", # use one if using gated models
 )
 
 # Input prompt
