@@ -19,7 +19,7 @@ from unsloth import FastModel
 import torch
 import sys
 from trl import SFTTrainer, SFTConfig
-from unsloth.chat_templates import train_on_responses_only, get_chat_template, standardize_data_formats
+from unsloth.chat_templates import train_on_responses_only, get_chat_template
 from datasets import load_dataset, Dataset
 import pandas as pd
 
@@ -68,8 +68,7 @@ def formatting_prompts_func(example):
 
 dataset_df = pd.read_csv(f"/scratch/wd04/bk2508/repositories/iot-llm-grpo/data/{dataset_name}-{model_name.split('/')[1].lower()}-train.csv")
 dataset = Dataset.from_pandas(dataset_df)
-standardized_dataset = standardize_data_formats(dataset)
-formatted_dataset = standardized_dataset.map(formatting_prompts_func, batched = True)
+formatted_dataset = dataset.map(formatting_prompts_func, batched = True)
 
 trainer = SFTTrainer(
     model = model,
