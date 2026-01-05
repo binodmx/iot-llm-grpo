@@ -11,10 +11,10 @@
 #PBS -l wd
 #PBS -M s4025371@student.rmit.edu.au
 #PBS -m be
-#PBS -o /scratch/wd04/bk2508/repositories/iot-llm-grpo/gadi/run-llm/logs/
-#PBS -e /scratch/wd04/bk2508/repositories/iot-llm-grpo/gadi/run-llm/logs/
+#PBS -o /scratch/wd04/bk2508/repositories/iot-llm-grpo/gadi/fine-tune-llm/logs/
+#PBS -e /scratch/wd04/bk2508/repositories/iot-llm-grpo/gadi/fine-tune-llm/logs/
 
 module load python3/3.10.4
 source /scratch/wd04/bk2508/venvs/llm-env/bin/activate
-python3 main.py $PBS_JOBID "unsloth/gemma-3-4b-it" "FineTome-100k" > /scratch/wd04/bk2508/repositories/iot-llm-grpo/gadi/run-llm/logs/$PBS_JOBID.log
+python3 main.py $PBS_JOBID "unsloth/gemma-3-4b-it" "FineTome-100k" > /scratch/wd04/bk2508/repositories/iot-llm-grpo/gadi/fine-tune-llm/logs/$PBS_JOBID.log
 deactivate
