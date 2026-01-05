@@ -1,5 +1,5 @@
 """
-Run language models using Transformers.
+Run language models using unsloth.
 
 Detailed description:
     This module provides functionality to run language models using the 
@@ -24,7 +24,8 @@ job_id = sys.argv[1].split(".")[0]
 model_name = sys.argv[2]
 
 model, tokenizer = FastModel.from_pretrained(
-    model_name = model_name,
+    model_name = f"/scratch/wd04/bk2508/models/{model_name}",
+    local_files_only=True,
     max_seq_length = 2048, # Choose any for long context!
     load_in_4bit = False,  # 4 bit quantization to reduce memory
     load_in_8bit = False, # [NEW!] A bit more accurate, uses 2x memory
@@ -53,4 +54,3 @@ with torch.no_grad():
 generated_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
 print(f"Device: {model.device}")
 print(f"Output: {generated_text}")
-
