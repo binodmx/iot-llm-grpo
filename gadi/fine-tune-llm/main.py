@@ -3,7 +3,13 @@ Fine-tune language models using unsl.
 
 Detailed description:
     This module provides functionality to fine-tune language models using the 
-    unsloth library.
+    unsloth library. The dataset should be downloaded before running this script.
+
+    ```python
+    from datasets import load_dataset
+    dataset = load_dataset("mlabonne/FineTome-100k", split = "train")
+    dataset.save_to_disk("FineTome-100k-gemma-3-4b-it-train")
+    ```
 
 Usage example:
     >>> qsub jobscript.sh
@@ -19,8 +25,8 @@ from unsloth import FastModel
 import torch
 import sys
 from trl import SFTTrainer, SFTConfig
-from unsloth.chat_templates import train_on_responses_only, get_chat_template
-from datasets import load_dataset, Dataset
+from unsloth.chat_templates import train_on_responses_only, get_chat_template, standardize_data_formats
+from datasets import load_dataset, Dataset, load_from_disk
 import pandas as pd
 
 # Set job id and model name
@@ -61,19 +67,19 @@ tokenizer = get_chat_template(
     chat_template = chat_template_name,
 )
 
-def formatting_prompts_func(example):
-   convos = example["conversations"]
+def formatting_prompts_func(examples):
+   convos = examples["conversations"]
    texts = [tokenizer.apply_chat_template(convo, tokenize = False, add_generation_prompt = False).removeprefix('<bos>') for convo in convos]
    return { "text" : texts, }
 
-dataset_df = pd.read_csv(f"/scratch/wd04/bk2508/repositories/iot-llm-grpo/data/{dataset_name}-{model_name.split('/')[1].lower()}-train.csv")
-dataset = Dataset.from_pandas(dataset_df)
-formatted_dataset = dataset.map(formatting_prompts_func, batched = True)
+dataset = load_from_disk(f"/scratch/wd04/bk2508/repositories/iot-llm-grpo/data/{dataset_name}-{model_name.split('/')[1].lower()}-train")
+dataset = standardize_data_formats(dataset)
+dataset = dataset.map(formatting_prompts_func, batched = True)
 
 trainer = SFTTrainer(
     model = model,
     tokenizer = tokenizer,
-    train_dataset = formatted_dataset,
+    train_dataset = dataset,
     eval_dataset = None, # Can set up evaluation!
     args = SFTConfig(
         output_dir=output_dir,
