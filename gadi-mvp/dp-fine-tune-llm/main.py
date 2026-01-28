@@ -1,5 +1,5 @@
 """
-Fine-tune language models using unsloth.
+Fine-tune language models with dp using unsloth & opacus.
 
 Detailed description:
     This module provides functionality to fine-tune language models using the 
@@ -18,7 +18,7 @@ Author:
     Binod Karunanayake
 
 Created:
-    2026-01-05
+    2026-01-28
 """
 
 from unsloth import FastModel
@@ -28,12 +28,20 @@ from trl import SFTTrainer, SFTConfig
 from unsloth.chat_templates import train_on_responses_only, get_chat_template, standardize_data_formats
 from datasets import load_dataset, Dataset, load_from_disk
 import pandas as pd
+from opacus import PrivacyEngine
+from opacus.validators import ModuleValidator
 
 # Set job id and model name
 job_id = sys.argv[1].split(".")[0]
 model_name = sys.argv[2]
 dataset_name = sys.argv[3]
 chat_template_name = "gemma-3"
+
+# Differential Privacy Configuration
+enable_dp = True  # Set to True to enable differential privacy
+target_epsilon = 8.0  # Privacy budget (lower = stronger privacy)
+target_delta = 1e-5  # Delta parameter (typically 1/number_of_samples)
+max_grad_norm = 1.0  # Gradient clipping threshold
 
 # Set output directory
 output_dir = f"/scratch/wd04/bk2508/repositories/iot-llm-grpo/fine-tuned-models/{dataset_name}-{model_name.split('/')[1].lower()}-{job_id}"
@@ -62,6 +70,10 @@ model = FastModel.get_peft_model(
     random_state = 3407,
 )
 
+# Validate model for differential privacy if enabled
+if enable_dp:
+    model = ModuleValidator.fix(model)
+
 tokenizer = get_chat_template(
     tokenizer,
     chat_template = chat_template_name,
@@ -76,6 +88,17 @@ dataset = load_from_disk(f"/scratch/wd04/bk2508/repositories/iot-llm-grpo/data/{
 dataset = standardize_data_formats(dataset)
 dataset = dataset.map(formatting_prompts_func, batched = True)
 
+# Adjust batch size for differential privacy to account for noise
+if enable_dp:
+    # DP-SGD requires careful tuning of batch size and learning rate
+    per_device_batch_size = 2
+    gradient_accumulation = 4
+    learning_rate = 1e-4  # Reduce learning rate for DP training
+else:
+    per_device_batch_size = 2
+    gradient_accumulation = 4
+    learning_rate = 2e-4
+
 trainer = SFTTrainer(
     model = model,
     tokenizer = tokenizer,
@@ -84,12 +107,12 @@ trainer = SFTTrainer(
     args = SFTConfig(
         output_dir=output_dir,
         dataset_text_field = "text",
-        per_device_train_batch_size = 2,
-        gradient_accumulation_steps = 4, # Use GA to mimic batch size!
+        per_device_train_batch_size = per_device_batch_size,
+        gradient_accumulation_steps = gradient_accumulation, # Use GA to mimic batch size!
         warmup_steps = 5,
         # num_train_epochs = 1, # Set this for 1 full training run.
         max_steps = 30,
-        learning_rate = 2e-4, # Reduce to 2e-5 for long training runs
+        learning_rate = learning_rate,
         logging_steps = 1,
         optim = "adamw_8bit",
         weight_decay = 0.001,
@@ -104,6 +127,19 @@ trainer = train_on_responses_only(
     instruction_part = "<start_of_turn>user\n",
     response_part = "<start_of_turn>model\n",
 )
+
+# Attach privacy engine to trainer if differential privacy is enabled
+if enable_dp:
+    print("Enabling Differential Privacy...")
+    privacy_engine = PrivacyEngine()
+    trainer.model, trainer.optimizer, trainer.train_dataloader = privacy_engine.make_private(
+        module=trainer.model,
+        optimizer=trainer.optimizer,
+        data_loader=trainer.train_dataloader,
+        noise_multiplier=1.0,  # Controls privacy-utility tradeoff
+        max_grad_norm=max_grad_norm,
+    )
+    print(f"Privacy Engine attached with epsilon={target_epsilon}, delta={target_delta}")
 
 gpu_stats = torch.cuda.get_device_properties(0)
 start_gpu_memory = round(torch.cuda.max_memory_reserved() / 1024 / 1024 / 1024, 3)
@@ -123,3 +159,12 @@ print(f"Peak reserved memory = {used_memory} GB.")
 print(f"Peak reserved memory for training = {used_memory_for_lora} GB.")
 print(f"Peak reserved memory % of max memory = {used_percentage} %.")
 print(f"Peak reserved memory for training % of max memory = {lora_percentage} %.")
+
+# Print differential privacy information if enabled
+if enable_dp:
+    epsilon = privacy_engine.accountant.get_epsilon(target_delta)
+    print(f"\n--- Differential Privacy Summary ---")
+    print(f"Differential Privacy Enabled: {enable_dp}")
+    print(f"Target Delta: {target_delta}")
+    print(f"Achieved Epsilon: {epsilon:.4f}")
+    print(f"Max Gradient Norm: {max_grad_norm}")

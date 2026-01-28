@@ -1,8 +1,8 @@
 #!/bin/bash
 
 #PBS -P wd04
-#PBS -q gpuvolta
-#PBS -l ncpus=12
+#PBS -q dgxa100
+#PBS -l ncpus=16
 #PBS -l ngpus=1
 #PBS -l mem=256GB
 #PBS -l jobfs=1GB
